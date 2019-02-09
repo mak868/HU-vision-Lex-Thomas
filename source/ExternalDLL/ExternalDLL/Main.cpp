@@ -19,14 +19,14 @@ int main(int argc, char * argv[]) {
 	//ImageFactory::setImplementation(ImageFactory::STUDENT);
 
 
-	ImageIO::debugFolder = "D:\\Users\\Rolf\\Downloads\\FaceMinMin";
+	ImageIO::debugFolder = R"(D:\Projects\School\Jaar 2\Blok 3\Vision\HU-vision-Lex-Thomas\debug)";
 	ImageIO::isInDebugMode = true; //If set to false the ImageIO class will skip any image save function calls
 
 
-
+	std::cout << "Starting!" << std::endl;
 
 	RGBImage * input = ImageFactory::newRGBImage();
-	if (!ImageIO::loadImage("D:\\Users\\Rolf\\Downloads\\TestA5.jpg", *input)) {
+	if (!ImageIO::loadImage(R"(D:\Projects\School\Jaar 2\Blok 3\Vision\HU-vision-Lex-Thomas\testsets\Set A\TestSet Images\child-1.png)", *input)) {
 		std::cout << "Image could not be loaded!" << std::endl;
 		system("pause");
 		return 0;
@@ -47,7 +47,7 @@ int main(int argc, char * argv[]) {
 	}
 
 	delete executor;
-	system("pause");
+	//system("pause");
 	return 1;
 }
 
@@ -114,7 +114,7 @@ bool executeSteps(DLLExecution * executor) {
 		return false;
 	}
 
-	if (!executor->executeLocalizationStep5(false)) {
+	if (!executor->executeLocalizationStep5(true)) {
 		std::cout << "Localization step 5 failed!" << std::endl;
 		return false;
 	}
