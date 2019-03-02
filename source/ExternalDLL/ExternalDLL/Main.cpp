@@ -26,7 +26,7 @@ int main(int argc, char * argv[]) {
 	std::cout << "Starting!" << std::endl;
 
 	RGBImage * input = ImageFactory::newRGBImage();
-	if (!ImageIO::loadImage(R"(D:\Projects\School\Jaar 2\Blok 3\Vision\HU-vision-Lex-Thomas\testsets\Set A\TestSet Images\child-1.png)", *input)) {
+	if (!ImageIO::loadImage(R"(D:\Projects\School\Jaar 2\Blok 3\Vision\HU-vision-Lex-Thomas\testsets\Set A\TestSet Images\male-1.png)", *input)) {
 		std::cout << "Image could not be loaded!" << std::endl;
 		system("pause");
 		return 0;

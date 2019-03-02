@@ -3,7 +3,11 @@
 #include "ImageFactory.h"
 #include "ImageIO.h"
 
+#include <vector>
 #include <array>
+#include <numeric>
+#include <queue>
+#include <set>
 
 bool StudentLocalization::stepFindHead(const IntensityImage &image, FeatureMap &features) const {
 	return false;
@@ -23,7 +27,7 @@ bool StudentLocalization::stepFindNoseEndsAndEyes(const IntensityImage &image, F
 
 void saveDebug(const IntensityImage &image, const std::string &filename)
 {
-	RGBImage * out = ImageFactory::newRGBImage(image.getWidth(), image.getHeight());
+	RGBImage *out = ImageFactory::newRGBImage(image.getWidth(), image.getHeight());
 
 	for (int x = 0; x < image.getWidth(); x++)
 	{
@@ -37,123 +41,453 @@ void saveDebug(const IntensityImage &image, const std::string &filename)
 	delete out;
 }
 
-void pointAround(IntensityImage &img, const Point2D<double> &p)
+void saveHistogram(const std::vector<int> &values, const std::string &filename)
 {
-	for (auto x = p.x - 1; x < p.x + 1; x++)
+	const int height = *std::max_element(values.begin(), values.end());
+	int threshold = std::accumulate(values.begin(), values.end(), 0) / values.size() * 2;
+
+	threshold = std::min(threshold, height - 1);
+	
+	int selected = 0;
+
+	// std::upper_bound won't work here
+	for (int i = 0; i < values.size(); i++)
 	{
-		for (auto y=  p.y - 1; y < p.y + 1; y++)
+		if (values[i] > threshold)
 		{
-			img.setPixel(x, y, 127);
+			selected = i;
+			break;
 		}
 	}
+
+	RGBImage *out = ImageFactory::newRGBImage(values.size(), height);
+
+	for (int i = 0; i < values.size(); i++)
+	{
+		// Fill entire column
+		for (int j = 0; j < values[i]; j++)
+		{
+			out->setPixel(i, j, RGB(255, 255, 255));
+		}
+
+		// Fill avg pixel
+		out->setPixel(i, threshold, RGB(127, 127, 127));
+	}
+
+	// Fill selected column
+	for (int i = 0; i < out->getHeight(); i++)
+	{
+		out->setPixel(selected, i, RGB(80, 80, 80));
+	}
+
+	ImageIO::saveRGBImage(*out, ImageIO::getDebugFileName(filename));
+	delete out;
 }
 
 template<int X, int Y>
 using kernel = std::array<std::array<bool, X>, Y>;
 
-/**
- * Dilate a given intensity image with the given kernel.
- */
-template<int X, int Y>
-void dilate(const IntensityImage &source, IntensityImage &dest, const kernel<X, Y> &k, int maxY)
+template<typename T>
+struct rect
 {
-	for (int x = 0; x < dest.getWidth(); x++)
+	T x;
+	T y;
+	T width;
+	T height;
+
+	rect() : x(0), y(0), width(0), height(0) {}
+
+	rect(T x, T y, T width, T height) 
+		: x(x), y(y), width(width), height(height) {}
+};
+
+template<typename T>
+bool operator<(const Point2D<T> first, const Point2D<T> second)
+{
+	return first.x < second.x && first.y < second.y;
+}
+
+class bfs
+{
+protected:
+	struct bfs_entry
 	{
-		for (int y = 0; y < maxY; y++)
+		Point2D<int> loc;
+		int distance;
+
+		bfs_entry(const Point2D<int> loc, int distance = -1)
+			: loc(loc), distance(distance) {}
+	};
+
+	const IntensityImage &source;
+
+	static std::array<Point2D<int>, 8> get_neighbours(const Point2D<int> loc)
+	{
+		return { {
+			{loc.x - 1, loc.y - 1},
+			{ loc.x, loc.y - 1 },
+			{ loc.x + 1, loc.y - 1 },
+			{ loc.x + 1, loc.y },
+			{ loc.x + 1, loc.y + 1 },
+			{ loc.x, loc.y + 1 },
+			{ loc.x - 1, loc.y + 1 },
+			{ loc.x - 1, loc.y },
+		}};
+	}
+
+public:
+	explicit bfs(const IntensityImage &source)
+		: source(source) {}
+
+	std::vector<Point2D<int>> expand_area(const Point2D<int> start, const int max_depth = 8) const
+	{
+		const auto equal = [](const Point2D<int> a, const Point2D<int> b)
 		{
-			bool inMask = false;
+			// Inverted because of strict weak ordering
+			return !(a.x == b.x && a.y == b.y);
+		};
 
-			const auto centerX = X / 2;
-			const auto centerY = Y / 2;
+		std::set<Point2D<int>, decltype(equal)> visited({}, equal);
+		std::vector<Point2D<int>> result;
+	
+		std::queue<bfs_entry> q;
+		q.emplace(start, 0);
 
-			for (int kx = 0; kx < X; kx++)
+		while (!q.empty())
+		{
+			const auto u = q.back();
+			q.pop();
+
+			if (u.distance + 1 >= max_depth)
 			{
-				for (int ky = 0; ky < Y; ky++)
-				{
-					// Check if this position is in the kernel
-					if (!k[kx][ky])
-					{
-						continue;
-					}
-
-					// Combine into the x and y to be checked
-					const auto currX = x + kx - centerX;
-					const auto currY = y + ky - centerY;
-
-					// Bounds check
-					if (currX < 0 || currY < 0 || currX > source.getWidth() || currY > source.getHeight())
-					{
-						continue;
-					}
-
-					// Check
-					if (source.getPixel(currX, currY) == 0)
-					{
-						inMask = true;
-						break;
-					}
-				}
-
-				// Early return
-				if (inMask)
-				{
-					break;
-				}
+				continue;
 			}
 
-			dest.setPixel(x, y, inMask ? 0 : 255);
+			const auto points = get_neighbours(u.loc);
+			for (const auto p : points)
+			{
+				if (visited.find(p) != visited.end())
+				{
+					continue;
+				}
+
+				visited.insert(p);
+
+				if (p.x < 0 || p.y < 0 || p.x > source.getWidth() || p.y > source.getHeight())
+				{
+					continue;
+				}
+
+				if (source.getPixel(p.x, p.y) != 0)
+				{
+					continue;
+				}
+
+				result.push_back(p);
+				q.emplace(p, u.distance + 1);
+			}
+		}
+
+		return result;
+	}
+};
+
+class img_wrapper
+{
+protected:
+	IntensityImage *image;
+
+public:
+	img_wrapper(int width, int height)
+	{
+		image = ImageFactory::newIntensityImage(width, height);
+	}
+
+	img_wrapper(const img_wrapper &other)
+	{
+		image = other.image;
+	}
+
+	img_wrapper(img_wrapper &&other) noexcept
+	{
+		image = other.image;
+	}
+
+	~img_wrapper()
+	{
+		delete image;
+	}
+
+	IntensityImage &get()
+	{
+		return *image;
+	}
+
+	IntensityImage const &get() const
+	{
+		return *image;
+	}
+};
+
+template<typename Func>
+void iter(const rect<int> bounds, Func f)
+{
+	for (auto x = bounds.x; x < bounds.x + bounds.width; x++)
+	{
+		for (auto y = bounds.y; y < bounds.y + bounds.height; y++)
+		{
+			f(x, y);
 		}
 	}
 }
 
-bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, FeatureMap &features) const {
-	auto *target = ImageFactory::newIntensityImage(image.getWidth(), image.getHeight());
+template<int X, int Y>
+void erode(const IntensityImage &source, IntensityImage &dest, const rect<int> bounds, const kernel<X, Y> &k)
+{
+	iter(bounds, [&](const int x, const int y)
+	{
+		bool inMask = true;
 
+		// Explicit rounding
+		const auto centerX = X / 2;
+		const auto centerY = Y / 2;
+
+		for (int kx = 0; kx < X; kx++)
+		{
+			for (int ky = 0; ky < Y; ky++)
+			{
+				// Check if this position is in the kernel
+				if (!k[kx][ky])
+				{
+					continue;
+				}
+
+				// Combine into the x and y to be checked
+				const auto currX = x + kx - centerX;
+				const auto currY = y + ky - centerY;
+
+				// Bounds check
+				if (currX < 0 || currY < 0 || currX > source.getWidth() || currY > source.getHeight() - 1)
+				{
+					continue;
+				}
+
+				// Check
+				if (source.getPixel(currX, currY) == 255)
+				{
+					inMask = false;
+					break;
+				}
+			}
+
+			// Early return
+			if (!inMask)
+			{
+				break;
+			}
+		}
+
+		dest.setPixel(
+			x - bounds.x,
+			y - bounds.y,
+			inMask ? 0 : 255
+		);
+	});
+}
+
+/**
+ * Dilate a given Tensity image with the given kernel.
+ */
+template<int X, int Y>
+void dilate(const IntensityImage &source, IntensityImage &dest, const rect<int> bounds, const kernel<X, Y> &k)
+{
+	iter(bounds, [&](const int x, const int y)
+	{
+		bool inMask = false;
+
+		// Explicit rounding
+		const auto centerX = X / 2;
+		const auto centerY = Y / 2;
+
+		for (int kx = 0; kx < X; kx++)
+		{
+			for (int ky = 0; ky < Y; ky++)
+			{
+				// Check if this position is in the kernel
+				if (!k[kx][ky])
+				{
+					continue;
+				}
+
+				// Combine into the x and y to be checked
+				const auto currX = x + kx - centerX;
+				const auto currY = y + ky - centerY;
+
+				// Bounds check
+				if (currX < bounds.x || currY < bounds.x || currX > bounds.width || currY > bounds.height - 1)
+				{
+					continue;
+				}
+
+				// Check
+				if (source.getPixel(currX, currY) == 0)
+				{
+					inMask = true;
+					break;
+				}
+			}
+
+			// Early return
+			if (inMask)
+			{
+				break;
+			}
+		}
+
+		dest.setPixel(
+			x - bounds.x,
+			y - bounds.y,
+			inMask ? 0 : 255
+		);
+	});
+}
+
+std::vector<int> score_rows(const IntensityImage &source, const rect<int> bounds)
+{
+	std::vector<int> scores;
+
+	for (int row = 0; row < bounds.height; row++)
+	{
+		int score = 0;
+		for (int col = 0; col < bounds.width; col++)
+		{
+			if (source.getPixel(col, row) == 0)
+			{
+				score += 1;
+			}
+		}
+
+		scores.push_back(score);
+	}
+
+	return scores;
+}
+
+bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, FeatureMap &features) const {
 	saveDebug(image, "incoming.png");
 
-	//Known head parameters.
-	Point2D<double> points[] = {
+	/*Point2D<double> points[] = {
 		features.getFeature(Feature::FEATURE_HEAD_LEFT_NOSE_BOTTOM).getPoints()[0],
 		features.getFeature(Feature::FEATURE_HEAD_RIGHT_NOSE_BOTTOM).getPoints()[0],
 		features.getFeature(Feature::FEATURE_NOSE_END_LEFT).getPoints()[0],
 		features.getFeature(Feature::FEATURE_NOSE_END_RIGHT).getPoints()[0],
 		features.getFeature(Feature::FEATURE_NOSE_BOTTOM).getPoints()[0]
+	};*/
+
+	const int headLeft = features.getFeature(Feature::FEATURE_HEAD_LEFT_NOSE_BOTTOM).getPoints()[0].x;
+	const int headRight = features.getFeature(Feature::FEATURE_HEAD_RIGHT_NOSE_BOTTOM).getPoints()[0].x;
+	const int noseY = features.getFeature(Feature::FEATURE_NOSE_BOTTOM).getPoints()[0].y;
+
+	const rect<int> bounds {
+		headLeft,
+		noseY / 5 * 3,
+		headRight - headLeft,
+		noseY / 3
 	};
 
-	auto noseY = features.getFeature(Feature::FEATURE_NOSE_BOTTOM).getPoints()[0].y;
-
-	auto width = points[1] - points[0];
-
-	// DEBUG
-	/*
-	for (int i = points[0].getX(); i < points[1].getX(); i++)
-	{
-		target->setPixel(i, points[0].getY(), 127);
-	}
-
-	for (const auto &p : points)
-	{
-		pointAround(*target, p);
-	}
-
-	saveDebug(*target, "points.png");
-	*/
-
-	// Dilation
-	kernel<3, 3> k = { {
+	const kernel<3, 3> erosion_kernel = { {
 		{0, 1, 0},
 		{1, 1, 1},
 		{0, 1, 0}
+	} };
+
+	const kernel<3, 3> dilation_kernel = { {
+		{0,  1, 0},
+		{1,  1, 1},
+		{0,  1, 0}
 	}};
 
+	auto dilated = img_wrapper(bounds.width, bounds.height);
+	auto eroded = img_wrapper(bounds.width, bounds.height);
+
 	// Dilation happens in the part of the image above the nose
-	dilate(image, *target, k, noseY);
+	erode(
+		image,
+		eroded.get(),
+		bounds, 
+		erosion_kernel
+	);
 
-	saveDebug(*target, "dilate.png");
+	saveDebug(eroded.get(), "eroded.png");
 
+	dilate(
+		eroded.get(),
+		dilated.get(),
+		{ 
+			0,
+			0,
+			bounds.width,
+			bounds.height 
+		},
+		dilation_kernel
+	);
 
-	delete target;
+#if 1
+	const auto scores = score_rows(dilated.get(), bounds);
+
+	saveHistogram(scores, "histogram.png");
+
+	int max = *std::max_element(scores.begin(), scores.end());
+	int threshold = std::accumulate(scores.begin(), scores.end(), 0) / scores.size() * 2;
+
+	threshold = std::min(threshold, max);
+
+	int selected = 0;
+
+	// std::upper_bound won't work here
+	for (int i = 0; i < scores.size(); i++)
+	{
+		if (scores[i] > threshold)
+		{
+			selected = i;
+			break;
+		}
+	}
+
+	// Find first pixel to BFS
+	Point2D<int> start(0, selected);
+	for (int col = 0; col < bounds.width; col++)
+	{
+		if (!dilated.get().getPixel(col, selected))
+		{
+			start.x = col;
+			break;
+		}
+	}
+
+	/*for (int col = 0; col < bounds.width; col++)
+	{
+		dilated.get().setPixel(col, selected, 64);
+	}*/
+	bfs b(dilated.get());
+	const auto result = b.expand_area(start);
+	for (const auto p : result)
+	{
+		dilated.get().setPixel(p.x, p.y, 127);
+	}
+
 	
+	
+	/*for (int eye_row = 0; eye_row < eye_rows.size(); eye_row++)
+	{
+		for (int col = 0; col < bounds.width; col++)
+		{
+			dilated.get().setPixel(col, eye_rows[eye_row], 127);
+		}
+	}*/
+#endif
+
+	saveDebug(dilated.get(), "dilate.png");
 
 	return true;
 }
