@@ -7,7 +7,7 @@
 #include <array>
 #include <numeric>
 #include <queue>
-#include <set>
+#include <unordered_set>
 
 bool StudentLocalization::stepFindHead(const IntensityImage &image, FeatureMap &features) const {
 	return false;
@@ -84,6 +84,22 @@ void saveHistogram(const std::vector<int> &values, const std::string &filename)
 	delete out;
 }
 
+namespace std {
+	template <>
+	struct hash<Point2D<int>>
+	{
+		typedef Point2D<int>      argument_type;
+		typedef std::size_t  result_type;
+
+		result_type operator()(const Point2D<int> & t) const
+		{
+			std::hash<int> hasher;
+			const size_t seed = hasher(t.x);
+			return seed ^ hasher(t.y) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		}
+	};
+}
+
 template<int X, int Y>
 using kernel = std::array<std::array<bool, X>, Y>;
 
@@ -121,7 +137,7 @@ protected:
 
 	const IntensityImage &source;
 
-	static std::array<Point2D<int>, 8> get_neighbours(const Point2D<int> loc)
+	static std::array<Point2D<int>, 8> get_neighbours(const Point2D<int> &loc)
 	{
 		return { {
 			{loc.x - 1, loc.y - 1},
@@ -139,24 +155,20 @@ public:
 	explicit bfs(const IntensityImage &source)
 		: source(source) {}
 
-	std::vector<Point2D<int>> expand_area(const Point2D<int> start, const int max_depth = 8) const
+	std::unordered_set<Point2D<int>> expand_area(const Point2D<int> start, const int max_depth = 16) const
 	{
-		const auto equal = [](const Point2D<int> a, const Point2D<int> b)
-		{
-			// Inverted because of strict weak ordering
-			return !(a.x == b.x && a.y == b.y);
-		};
+		std::unordered_set<Point2D<int>> visited({ start });
+		std::unordered_set<Point2D<int>> result({ start });
 
-		std::set<Point2D<int>, decltype(equal)> visited({}, equal);
-		std::vector<Point2D<int>> result;
-	
 		std::queue<bfs_entry> q;
 		q.emplace(start, 0);
 
 		while (!q.empty())
 		{
-			const auto u = q.back();
+			const auto u = q.front();
 			q.pop();
+
+			visited.insert(u.loc);
 
 			if (u.distance + 1 >= max_depth)
 			{
@@ -164,14 +176,12 @@ public:
 			}
 
 			const auto points = get_neighbours(u.loc);
-			for (const auto p : points)
+			for (const auto &p : points)
 			{
 				if (visited.find(p) != visited.end())
 				{
 					continue;
 				}
-
-				visited.insert(p);
 
 				if (p.x < 0 || p.y < 0 || p.x > source.getWidth() || p.y > source.getHeight())
 				{
@@ -183,7 +193,7 @@ public:
 					continue;
 				}
 
-				result.push_back(p);
+				result.insert(p);
 				q.emplace(p, u.distance + 1);
 			}
 		}
