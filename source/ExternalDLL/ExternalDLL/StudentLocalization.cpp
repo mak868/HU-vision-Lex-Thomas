@@ -91,10 +91,11 @@ namespace std {
 		typedef Point2D<int>      argument_type;
 		typedef std::size_t  result_type;
 
-		result_type operator()(const Point2D<int> & t) const
+		result_type operator()(const Point2D<int> & t) const noexcept
 		{
-			std::hash<int> hasher;
-			const size_t seed = hasher(t.x);
+			const std::hash<int> hasher;
+			const result_type seed = hasher(t.x);
+
 			return seed ^ hasher(t.y) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 		}
 	};
@@ -116,12 +117,6 @@ struct rect
 	rect(T x, T y, T width, T height) 
 		: x(x), y(y), width(width), height(height) {}
 };
-
-template<typename T>
-bool operator<(const Point2D<T> first, const Point2D<T> second)
-{
-	return first.x < second.x && first.y < second.y;
-}
 
 class bfs
 {
@@ -168,8 +163,6 @@ public:
 			const auto u = q.front();
 			q.pop();
 
-			visited.insert(u.loc);
-
 			if (u.distance + 1 >= max_depth)
 			{
 				continue;
@@ -182,6 +175,8 @@ public:
 				{
 					continue;
 				}
+
+				visited.insert(p);
 
 				if (p.x < 0 || p.y < 0 || p.x > source.getWidth() || p.y > source.getHeight())
 				{
@@ -464,7 +459,10 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 		}
 	}
 
-	// Find first pixel to BFS
+	/**
+	 * Find the left eye, searching from the left on the
+	 * selected row.
+	 */
 	Point2D<int> start(0, selected);
 	for (int col = 0; col < bounds.width; col++)
 	{
@@ -475,19 +473,37 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 		}
 	}
 
-	/*for (int col = 0; col < bounds.width; col++)
+	/**
+	 * Find the right eye, searching from the right on the 
+	 * selected row.
+	 */
+	const auto width = dilated.get().getWidth();
+	Point2D<int> end(0, selected);
+	for (int col = width; col != 0; col--)
 	{
-		dilated.get().setPixel(col, selected, 64);
-	}*/
+		if (!dilated.get().getPixel(col, selected))
+		{
+			end.x = col;
+			break;
+		}
+	}
+
+	// Expand the eye planes
 	bfs b(dilated.get());
-	const auto result = b.expand_area(start);
-	for (const auto p : result)
+
+	const auto left_eye = b.expand_area(start);
+	const auto right_eye = b.expand_area(end);
+
+	for (const auto p : left_eye)
 	{
 		dilated.get().setPixel(p.x, p.y, 127);
 	}
 
-	
-	
+	for (const auto p : right_eye)
+	{
+		dilated.get().setPixel(p.x, p.y, 127);
+	}
+
 	/*for (int eye_row = 0; eye_row < eye_rows.size(); eye_row++)
 	{
 		for (int col = 0; col < bounds.width; col++)
