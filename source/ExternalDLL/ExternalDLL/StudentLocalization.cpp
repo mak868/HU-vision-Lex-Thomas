@@ -43,24 +43,18 @@ void saveDebug(const IntensityImage &image, const std::string &filename)
 
 void saveHistogram(const std::vector<int> &values, const std::string &filename)
 {
-	const int height = *std::max_element(values.begin(), values.end());
-	int threshold = std::accumulate(values.begin(), values.end(), 0) / values.size() * 2;
-
-	threshold = std::min(threshold, height - 1);
-	
 	int selected = 0;
 
 	// std::upper_bound won't work here
 	for (int i = 0; i < values.size(); i++)
 	{
-		if (values[i] > threshold)
+		if (values[i] > values[selected])
 		{
 			selected = i;
-			break;
 		}
 	}
 
-	RGBImage *out = ImageFactory::newRGBImage(values.size(), height);
+	RGBImage *out = ImageFactory::newRGBImage(values.size(), values[selected]);
 
 	for (int i = 0; i < values.size(); i++)
 	{
@@ -69,9 +63,6 @@ void saveHistogram(const std::vector<int> &values, const std::string &filename)
 		{
 			out->setPixel(i, j, RGB(255, 255, 255));
 		}
-
-		// Fill avg pixel
-		out->setPixel(i, threshold, RGB(127, 127, 127));
 	}
 
 	// Fill selected column
@@ -98,6 +89,15 @@ namespace std {
 
 			return seed ^ hasher(t.y) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 		}
+	};
+}
+
+template<typename T, typename U>
+Point2D<T> convert_point(const Point2D<U> &p)
+{
+	return {
+		static_cast<T>(p.x),
+		static_cast<T>(p.y)
 	};
 }
 
@@ -366,7 +366,7 @@ std::vector<int> score_rows(const IntensityImage &source, const rect<int> bounds
 		int score = 0;
 		for (int col = 0; col < bounds.width; col++)
 		{
-			if (source.getPixel(col, row) == 0)
+			if (source.getPixel(bounds.x + col, bounds.y + row) == 0)
 			{
 				score += 1;
 			}
@@ -378,26 +378,51 @@ std::vector<int> score_rows(const IntensityImage &source, const rect<int> bounds
 	return scores;
 }
 
+std::array<Point2D<int>, 2> get_plane_rect(const std::unordered_set<Point2D<int>> &points)
+{
+	Point2D<int> xy = { INT32_MAX, INT32_MAX };
+	Point2D<int> wh = { 0, 0 };
+
+	for (const auto &point : points)
+	{
+		if (xy.x > point.x)
+		{
+			xy.x = point.x;
+		}
+
+		if (xy.y > point.y)
+		{
+			xy.y = point.y;
+		}
+
+		if (wh.x < point.x)
+		{
+			wh.x = point.x;
+		}
+
+		if (wh.y < point.y)
+		{
+			wh.y = point.y;
+		}
+
+	}
+
+	return { xy, wh };
+}
+
 bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, FeatureMap &features) const {
 	saveDebug(image, "incoming.png");
 
-	/*Point2D<double> points[] = {
-		features.getFeature(Feature::FEATURE_HEAD_LEFT_NOSE_BOTTOM).getPoints()[0],
-		features.getFeature(Feature::FEATURE_HEAD_RIGHT_NOSE_BOTTOM).getPoints()[0],
-		features.getFeature(Feature::FEATURE_NOSE_END_LEFT).getPoints()[0],
-		features.getFeature(Feature::FEATURE_NOSE_END_RIGHT).getPoints()[0],
-		features.getFeature(Feature::FEATURE_NOSE_BOTTOM).getPoints()[0]
-	};*/
-
 	const int headLeft = features.getFeature(Feature::FEATURE_HEAD_LEFT_NOSE_BOTTOM).getPoints()[0].x;
 	const int headRight = features.getFeature(Feature::FEATURE_HEAD_RIGHT_NOSE_BOTTOM).getPoints()[0].x;
-	const int noseY = features.getFeature(Feature::FEATURE_NOSE_BOTTOM).getPoints()[0].y;
+	const int headTop = features.getFeature(Feature::FEATURE_HEAD_TOP).getPoints()[0].y;
+	const auto nose = features.getFeature(Feature::FEATURE_NOSE_BOTTOM).getPoints()[0];
 
-	const rect<int> bounds {
+	const rect<int> bounds{
 		headLeft,
-		noseY / 5 * 3,
+		headTop,
 		headRight - headLeft,
-		noseY / 3
+		static_cast<int>(nose.y)
 	};
 
 	const kernel<3, 3> erosion_kernel = { {
@@ -407,9 +432,9 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 	} };
 
 	const kernel<3, 3> dilation_kernel = { {
-		{0,  1, 0},
-		{1,  1, 1},
-		{0,  1, 0}
+		{0, 1, 0},
+		{1, 1, 1},
+		{0, 1, 0}
 	}};
 
 	auto dilated = img_wrapper(bounds.width, bounds.height);
@@ -437,27 +462,32 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 		dilation_kernel
 	);
 
-#if 1
-	const auto scores = score_rows(dilated.get(), bounds);
+	const auto &dilatedPtr = dilated.get();
+	const int eyeBrowOffset = dilatedPtr.getHeight() / 10;
+	const int scoreOffsetY = dilatedPtr.getHeight() / 2 + eyeBrowOffset;
+
+	const auto scores = score_rows(
+		dilated.get(), {
+		0,
+		scoreOffsetY,
+		dilatedPtr.getWidth(),
+		dilatedPtr.getHeight() - scoreOffsetY - headTop
+	});
 
 	saveHistogram(scores, "histogram.png");
-
-	int max = *std::max_element(scores.begin(), scores.end());
-	int threshold = std::accumulate(scores.begin(), scores.end(), 0) / scores.size() * 2;
-
-	threshold = std::min(threshold, max);
 
 	int selected = 0;
 
 	// std::upper_bound won't work here
 	for (int i = 0; i < scores.size(); i++)
 	{
-		if (scores[i] > threshold)
+		if (scores[i] > scores[selected])
 		{
 			selected = i;
-			break;
 		}
 	}
+
+	selected += scoreOffsetY;
 
 	/**
 	 * Find the left eye, searching from the left on the
@@ -491,8 +521,8 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 	// Expand the eye planes
 	bfs b(dilated.get());
 
-	const auto left_eye = b.expand_area(start);
-	const auto right_eye = b.expand_area(end);
+	const auto left_eye = b.expand_area(start, 24);
+	const auto right_eye = b.expand_area(end, 24);
 
 	for (const auto p : left_eye)
 	{
@@ -504,16 +534,32 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 		dilated.get().setPixel(p.x, p.y, 127);
 	}
 
-	/*for (int eye_row = 0; eye_row < eye_rows.size(); eye_row++)
-	{
-		for (int col = 0; col < bounds.width; col++)
-		{
-			dilated.get().setPixel(col, eye_rows[eye_row], 127);
-		}
-	}*/
-#endif
-
 	saveDebug(dilated.get(), "dilate.png");
+
+	const auto leftEyePoints = get_plane_rect(left_eye);
+	const auto rightEyePoints = get_plane_rect(right_eye);
+
+	Feature leftEye(Feature::FEATURE_EYE_LEFT_RECT);
+	for (auto p : leftEyePoints)
+	{
+		//p.x += headLeft;
+
+		leftEye.addPoint(
+			convert_point<double>(p)
+		);
+	}
+
+
+	Feature rightEye(Feature::FEATURE_EYE_RIGHT_RECT);
+	for (auto p : rightEyePoints)
+	{
+		rightEye.addPoint(
+			convert_point<double>(p)
+		);
+	}
+
+	features.putFeature(leftEye);
+	features.putFeature(rightEye);
 
 	return true;
 }
