@@ -11,11 +11,13 @@
 
 
 bool PostProcessing::stepLocalizeAdditionalFeatures(const IntensityImage &image, FeatureMap &features) const {
+	
+	/* Tmp turn off
 	std::cout << std::endl << std::endl;
 	std::cout << "========Post-processing step 1=======" << std::endl;
 	std::cout << "Searching for: head sides" << std::endl;
 	std::cout << "================Debug================" << std::endl;
-
+	*/
 
 	//Localize the features points HEAD_LEFT_NOSE_MIDDLE and HEAD_RIGHT_NOSE_MIDDLE
 	Feature leftEye = features.getFeature(Feature::FEATURE_EYE_LEFT_RECT);
@@ -88,11 +90,13 @@ bool PostProcessing::stepLocalizeAdditionalFeatures(const IntensityImage &image,
 
 
 bool PostProcessing::stepPostProcessAdjustFeatures(FeatureMap &features) const {
+	
+	/* Tmp turn off
 	std::cout << std::endl << std::endl;
 	std::cout << "========Post-processing step 2=======" << std::endl;
 	std::cout << "Adjusting features" << std::endl;
 	std::cout << "================Debug================" << std::endl;
-
+	*/
 
 	//Adjust the nose bottom x position
 	Feature noseBottom = features.getFeature(Feature::FEATURE_NOSE_BOTTOM);

@@ -411,6 +411,7 @@ std::array<Point2D<int>, 2> get_plane_rect(const std::unordered_set<Point2D<int>
 }
 
 bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, FeatureMap &features) const {
+
 	saveDebug(image, "incoming.png");
 
 	const int headLeft = features.getFeature(Feature::FEATURE_HEAD_LEFT_NOSE_BOTTOM).getPoints()[0].x;

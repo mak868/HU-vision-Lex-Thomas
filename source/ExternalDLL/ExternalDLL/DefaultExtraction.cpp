@@ -201,10 +201,13 @@ void FearNoMore(const IntensityImage &FearNoMoreTheHeatOTheSun, IntensityImage &
 }
 
 bool DefaultExtraction::stepExtractNose(const IntensityImage &image, FeatureMap &features) const {
+	
+	/* Tmp turn off
 	std::cout << std::endl << std::endl;
 	std::cout << "==========Extraction step 2==========" << std::endl;
 	std::cout << "Searching for: Nostrils" << std::endl;
 	std::cout << "================Debug================" << std::endl;
+	*/
 
 	//Create a debug image
 	RGBImage * debugImage = ImageFactory::newRGBImage(image.getWidth(), image.getHeight());
@@ -244,11 +247,13 @@ bool DefaultExtraction::stepExtractNose(const IntensityImage &image, FeatureMap 
 }
 
 bool DefaultExtraction::stepExtractMouth(const IntensityImage &image, FeatureMap &features) const {
+	
+	/* Tmp turn off
 	std::cout << std::endl << std::endl;
 	std::cout << "==========Extraction step 3==========" << std::endl;
 	std::cout << "Searching for: Mouth corners" << std::endl;
 	std::cout << "================Debug================" << std::endl;
-
+	*/
 
 	int OverHillOverDale = (int) features.getFeature(Feature::FEATURE_MOUTH_CENTER).getY();
 	int ThoroughBushThoroughBrier = (int) features.getFeature(Feature::FEATURE_MOUTH_TOP).getY();

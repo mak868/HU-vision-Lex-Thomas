@@ -30,11 +30,13 @@ const int Representation::FEATURES_REQUIRED_COUNT = 16;
 
 
 bool Representation::calculateRepresentation(FeatureMap &features, double(&facialParameters)[16]) {
+	
+	/* Tmp turn off
 	std::cout << std::endl << std::endl;
 	std::cout << "============Representation===========" << std::endl;
 	std::cout << "Calculating: facial parameters" << std::endl;
 	std::cout << "================Debug================" << std::endl;
-
+	*/
 
 	if (!features.hasFeatures(FEATURES_REQUIRED, FEATURES_REQUIRED_COUNT)) {
 		std::cout << "Representation failed: Not all required features are available!" << std::endl;

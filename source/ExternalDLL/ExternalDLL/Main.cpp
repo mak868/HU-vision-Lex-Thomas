@@ -10,8 +10,15 @@
 #include "ImageFactory.h"
 #include "DLLExecution.h"
 
+//clock timer
+#include <time.h>
+
+
 void drawFeatureDebugImage(IntensityImage &image, FeatureMap &features);
 bool executeSteps(DLLExecution * executor);
+int start_time , end_time = 0;
+int loop_time = 0;
+
 
 int main(int argc, char * argv[]) {
 
@@ -19,35 +26,46 @@ int main(int argc, char * argv[]) {
 	//ImageFactory::setImplementation(ImageFactory::STUDENT);
 
 
-	ImageIO::debugFolder = R"(D:\Projects\School\Jaar 2\Blok 3\Vision\HU-vision-Lex-Thomas\debug)";
-	ImageIO::isInDebugMode = true; //If set to false the ImageIO class will skip any image save function calls
+	ImageIO::debugFolder = R"(C:\Users\thoma\Documents\school\ICT\Periode C\Vision\gid\HU-vision-Lex-Thomas\debug)";
+	ImageIO::isInDebugMode = false; //If set to false the ImageIO class will skip any image save function calls
 
 
 	std::cout << "Starting!" << std::endl;
-
-	RGBImage * input = ImageFactory::newRGBImage();
-	if (!ImageIO::loadImage(R"(D:\Projects\School\Jaar 2\Blok 3\Vision\HU-vision-Lex-Thomas\testsets\Set A\TestSet Images\child-1.png)", *input)) {
-		std::cout << "Image could not be loaded!" << std::endl;
-		system("pause");
-		return 0;
-	}
-
-
-	ImageIO::saveRGBImage(*input, ImageIO::getDebugFileName("debug.png"));
-
-	DLLExecution * executor = new DLLExecution(input);
-
-
-	if (executeSteps(executor)) {
-		std::cout << "Face recognition successful!" << std::endl;
-		std::cout << "Facial parameters: " << std::endl;
-		for (int i = 0; i < 16; i++) {
-			std::cout << (i+1) << ": " << executor->facialParameters[i] << std::endl;
+	start_time = clock();
+	
+	for (int j = 0; j < 100; j++) {
+		RGBImage * input = ImageFactory::newRGBImage();
+		if (!ImageIO::loadImage(R"(C:\Users\thoma\Documents\school\ICT\Periode C\Vision\gid\HU-vision-Lex-Thomas\testsets\Set A\TestSet Images\female-2.png)", *input)) {
+			std::cout << "Image could not be loaded!" << std::endl;
+			system("pause");
+			return 0;
 		}
+
+
+		ImageIO::saveRGBImage(*input, ImageIO::getDebugFileName("debug43.png"));
+
+
+		DLLExecution * executor = new DLLExecution(input);
+
+
+		if (executeSteps(executor)) {
+			/*
+			std::cout << "Face recognition successful!" << std::endl;
+			std::cout << "Facial parameters: " << std::endl;
+			for (int i = 0; i < 16; i++) {
+				std::cout << (i+1) << ": " << executor->facialParameters[i] << std::endl;
+			}
+			*/
+		}
+
+		delete executor;
 	}
 
-	delete executor;
-	system("pause");
+
+	end_time = clock();
+	std::cout << "It took " <<  (((float)end_time - start_time)/100) / CLOCKS_PER_SEC << " SECONDS." << std::endl;
+	
+	//system("pause");
 	return 1;
 }
 
@@ -149,7 +167,7 @@ bool executeSteps(DLLExecution * executor) {
 		return false;
 	}
 
-	drawFeatureDebugImage(*executor->resultPreProcessingStep1, executor->featuresScaled);
+	//drawFeatureDebugImage(*executor->resultPreProcessingStep1, executor->featuresScaled);
 
 	if (!executor->executeRepresentation()) {
 		std::cout << "Representation failed!" << std::endl;

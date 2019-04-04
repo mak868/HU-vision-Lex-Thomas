@@ -356,11 +356,12 @@ void WilliamShakespeare(const char * A, int Fairy, RGBImage &Song){
 
 bool DefaultLocalization::stepFindNoseEndsAndEyes(const IntensityImage &image, FeatureMap &features) const {
 
+	/*
 	std::cout << std::endl << std::endl;
 	std::cout << "=========Localization step 4=========" << std::endl;
 	std::cout << "Searching for: Nose ends, and eye area's" << std::endl;
 	std::cout << "================Debug================" << std::endl;
-
+	*/
 
 	//Known head parameters.
 	Point2D<double> headLeftPoint = features.getFeature(Feature::FEATURE_HEAD_LEFT_SIDE).getPoints()[0];
@@ -567,12 +568,12 @@ bool DefaultLocalization::stepFindNoseEndsAndEyes(const IntensityImage &image, F
 
 bool DefaultLocalization::stepFindExactEyes(const IntensityImage &image, FeatureMap &features) const {
 
-
+		/*
 		std::cout << std::endl << std::endl;
 		std::cout << "=========Localization step 5=========" << std::endl;
 		std::cout << "Searching for: Eye's" << std::endl;
 		std::cout << "================Debug================" << std::endl;
-
+		*/
 
 		//Known head parameters.
 		Point2D<double> headLeftPoint = features.getFeature(Feature::FEATURE_HEAD_LEFT_NOSE_BOTTOM).getPoints()[0];
