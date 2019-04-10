@@ -5,7 +5,6 @@
 
 #include <vector>
 #include <array>
-#include <numeric>
 #include <queue>
 #include <unordered_set>
 
@@ -76,6 +75,10 @@ void saveHistogram(const std::vector<int> &values, const std::string &filename)
 }
 
 namespace std {
+	/**
+	 * Hash specialization for the Point2D<int>, this is
+	 * required for std::unordered_set
+	 */
 	template <>
 	struct hash<Point2D<int>>
 	{
@@ -92,6 +95,9 @@ namespace std {
 	};
 }
 
+/**
+ * Convert between Point2D specializations.
+ */
 template<typename T, typename U>
 Point2D<T> convert_point(const Point2D<U> &p)
 {
@@ -101,6 +107,9 @@ Point2D<T> convert_point(const Point2D<U> &p)
 	};
 }
 
+/**
+ * Helper alias for kernels.
+ */
 template<int X, int Y>
 using kernel = std::array<std::array<bool, X>, Y>;
 
@@ -118,6 +127,11 @@ struct rect
 		: x(x), y(y), width(width), height(height) {}
 };
 
+/**
+ * BFS is a helper class that allows BFS to be
+ * executed on a IntensityImage from the given starting
+ * point.
+ */
 class bfs
 {
 protected:
@@ -197,6 +211,10 @@ public:
 	}
 };
 
+/**
+ * Helper class that automatically
+ * cleans up created images.
+ */
 class img_wrapper
 {
 protected:
@@ -234,6 +252,10 @@ public:
 	}
 };
 
+/**
+ * Helper function that cleans up iteration
+ * over the given bounds.
+ */
 template<typename Func>
 void iter(const rect<int> bounds, Func f)
 {
@@ -246,6 +268,10 @@ void iter(const rect<int> bounds, Func f)
 	}
 }
 
+/**
+ * Execute erosion with the given kernel within
+ * the given bounds.
+ */
 template<int X, int Y>
 void erode(const IntensityImage &source, IntensityImage &dest, const rect<int> bounds, const kernel<X, Y> &k)
 {
@@ -301,7 +327,8 @@ void erode(const IntensityImage &source, IntensityImage &dest, const rect<int> b
 }
 
 /**
- * Dilate a given Tensity image with the given kernel.
+ * Dilate a given Tensity image with the given kernel
+ * within the given bounds.
  */
 template<int X, int Y>
 void dilate(const IntensityImage &source, IntensityImage &dest, const rect<int> bounds, const kernel<X, Y> &k)
@@ -357,6 +384,9 @@ void dilate(const IntensityImage &source, IntensityImage &dest, const rect<int> 
 	});
 }
 
+/**
+ * Score all rows between the given bounds by horizontal set pixels.
+ */
 std::vector<int> score_rows(const IntensityImage &source, const rect<int> bounds)
 {
 	std::vector<int> scores;
@@ -378,6 +408,10 @@ std::vector<int> score_rows(const IntensityImage &source, const rect<int> bounds
 	return scores;
 }
 
+/**
+ * Convert the result of a BFS to a rectangle that encompasses
+ * the entire BFS'ed area.
+ */
 std::array<Point2D<int>, 2> get_plane_rect(const std::unordered_set<Point2D<int>> &points)
 {
 	Point2D<int> xy = { INT32_MAX, INT32_MAX };
@@ -411,13 +445,16 @@ std::array<Point2D<int>, 2> get_plane_rect(const std::unordered_set<Point2D<int>
 }
 
 bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, FeatureMap &features) const {
-	saveDebug(image, "incoming.png");
+	//saveDebug(image, "incoming.png");
 
+	// We're going to need these facial features to start.
 	const int headLeft = features.getFeature(Feature::FEATURE_HEAD_LEFT_NOSE_BOTTOM).getPoints()[0].x;
 	const int headRight = features.getFeature(Feature::FEATURE_HEAD_RIGHT_NOSE_BOTTOM).getPoints()[0].x;
 	const int headTop = features.getFeature(Feature::FEATURE_HEAD_TOP).getPoints()[0].y;
 	const auto nose = features.getFeature(Feature::FEATURE_NOSE_BOTTOM).getPoints()[0];
 
+	// These bounds use assumptions of how a "normal"
+	// face works
 	const rect<int> bounds{
 		headLeft,
 		headTop,
@@ -448,7 +485,7 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 		erosion_kernel
 	);
 
-	saveDebug(eroded.get(), "eroded.png");
+	//saveDebug(eroded.get(), "eroded.png");
 
 	dilate(
 		eroded.get(),
@@ -474,7 +511,7 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 		dilatedPtr.getHeight() - scoreOffsetY - headTop
 	});
 
-	saveHistogram(scores, "histogram.png");
+	//saveHistogram(scores, "histogram.png");
 
 	int selected = 0;
 
@@ -534,28 +571,42 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 		dilated.get().setPixel(p.x, p.y, 127);
 	}
 
-	saveDebug(dilated.get(), "dilate.png");
+	//saveDebug(dilated.get(), "dilate.png");
 
 	const auto leftEyePoints = get_plane_rect(left_eye);
 	const auto rightEyePoints = get_plane_rect(right_eye);
+
+	/*
+	const rect<int> bounds{
+		headLeft,
+		headTop,
+		headRight - headLeft,
+		static_cast<int>(nose.y)
+	};
+	*/
 
 	Feature leftEye(Feature::FEATURE_EYE_LEFT_RECT);
 	for (auto p : leftEyePoints)
 	{
 		//p.x += headLeft;
+		auto point = convert_point<double>(p);
 
-		leftEye.addPoint(
-			convert_point<double>(p)
-		);
+		point.x += headLeft;
+		point.y += headTop;
+
+		leftEye.addPoint(point);
 	}
 
 
 	Feature rightEye(Feature::FEATURE_EYE_RIGHT_RECT);
 	for (auto p : rightEyePoints)
 	{
-		rightEye.addPoint(
-			convert_point<double>(p)
-		);
+		auto point = convert_point<double>(p);
+
+		point.x += headLeft;
+		point.y += headTop;
+
+		rightEye.addPoint(point);
 	}
 
 	features.putFeature(leftEye);
