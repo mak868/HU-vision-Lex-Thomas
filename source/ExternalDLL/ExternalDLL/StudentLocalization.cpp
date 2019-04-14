@@ -445,7 +445,7 @@ std::array<Point2D<int>, 2> get_plane_rect(const std::unordered_set<Point2D<int>
 }
 
 bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, FeatureMap &features) const {
-	//saveDebug(image, "incoming.png");
+	saveDebug(image, "incoming.png");
 
 	// We're going to need these facial features to start.
 	const int headLeft = features.getFeature(Feature::FEATURE_HEAD_LEFT_NOSE_BOTTOM).getPoints()[0].x;
@@ -485,7 +485,7 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 		erosion_kernel
 	);
 
-	//saveDebug(eroded.get(), "eroded.png");
+	saveDebug(eroded.get(), "eroded.png");
 
 	dilate(
 		eroded.get(),
@@ -511,7 +511,10 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 		dilatedPtr.getHeight() - scoreOffsetY - headTop
 	});
 
-	//saveHistogram(scores, "histogram.png");
+	if (ImageIO::isInDebugMode)
+	{
+		saveHistogram(scores, "histogram.png");
+	}
 
 	int selected = 0;
 
@@ -571,19 +574,10 @@ bool StudentLocalization::stepFindExactEyes(const IntensityImage &image, Feature
 		dilated.get().setPixel(p.x, p.y, 127);
 	}
 
-	//saveDebug(dilated.get(), "dilate.png");
+	saveDebug(dilated.get(), "dilate.png");
 
 	const auto leftEyePoints = get_plane_rect(left_eye);
 	const auto rightEyePoints = get_plane_rect(right_eye);
-
-	/*
-	const rect<int> bounds{
-		headLeft,
-		headTop,
-		headRight - headLeft,
-		static_cast<int>(nose.y)
-	};
-	*/
 
 	Feature leftEye(Feature::FEATURE_EYE_LEFT_RECT);
 	for (auto p : leftEyePoints)
