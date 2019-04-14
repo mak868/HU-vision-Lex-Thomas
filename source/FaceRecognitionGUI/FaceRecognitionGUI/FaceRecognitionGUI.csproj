@@ -145,9 +145,7 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resources\ExternalDLL.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <None Include="Resources\ExternalDLL.dll" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include=".NETFramework,Version=v4.5">
